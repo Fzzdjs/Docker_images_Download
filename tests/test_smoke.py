@@ -154,11 +154,15 @@ class MetadataTest(unittest.TestCase):
         self.assertIn("Permission is hereby granted", text)
 
     def test_cli_help_runs(self):
+        # Explicit PIPE + manual decode: text=True relies on the locale encoding,
+        # which differs between Linux runners and Windows runners.
         proc = subprocess.run([sys.executable, os.path.join(SCRIPTS, "fetch_image.py"), "--help"],
-                              capture_output=True, text=True, timeout=60)
-        self.assertEqual(proc.returncode, 0)
-        self.assertIn("--check", proc.stdout)
-        self.assertIn("--platform", proc.stdout)
+                              stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=60)
+        stdout = (proc.stdout or b"").decode("utf-8", "replace")
+        stderr = (proc.stderr or b"").decode("utf-8", "replace")
+        self.assertEqual(proc.returncode, 0, msg=stderr)
+        self.assertIn("--check", stdout)
+        self.assertIn("--platform", stdout)
 
 
 @unittest.skipIf(yaml is None, "PyYAML not installed")
