@@ -1,0 +1,55 @@
+name: Bug report
+description: Something failed: pull error, download problem, wrong archive
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before filing, please run `python scripts/fetch_image.py --check` — it
+        catches most token/permission/workflow problems and prints exactly what
+        is missing.
+
+  - type: input
+    id: image
+    attributes:
+      label: Image name
+      placeholder: ghcr.io/owner/repo:tag
+    validations:
+      required: true
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options: [amd64, arm64, arm32]
+    validations:
+      required: true
+
+  - type: textarea
+    id: command
+    attributes:
+      label: Command and full output
+      description: Paste the command plus the complete console output.
+      render: shell
+    validations:
+      required: true
+
+  - type: input
+    id: run-url
+    attributes:
+      label: Workflow run URL (if a run was created)
+
+  - type: input
+    id: env
+    attributes:
+      label: Environment
+      placeholder: Windows 11 / Python 3.13 / Docker 27.x
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: I ran `--check` and it reported no problems
+        - label: I am using my own fork (not the upstream repo) as `--repo`

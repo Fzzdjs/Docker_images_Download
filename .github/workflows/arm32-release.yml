@@ -1,0 +1,166 @@
+name: Get ARMv7 Docker Images Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      docker_images:
+        description: 'Image names, comma or newline separated (platform: linux/arm/v7)'
+        required: true
+        default: 'alpine:latest,alpine/curl,busybox:stable-glibc'
+
+# Creating or updating a release needs contents: write.
+permissions:
+  contents: write
+
+# Fixed release tags and fixed artifact names mean two runs would collide.
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+env:
+  PLATFORM: linux/arm/v7
+  ARCH: arm32
+  RELEASE_TAG: DockerImages-ARM32
+
+jobs:
+  pull_and_package:
+    # Defaults to a GitHub-hosted runner. To use your own machine (for example a
+    # VPS with a faster route), add RUNNER_LABELS=["self-hosted","linux","x64"]
+    # under Settings -> Secrets and variables -> Actions -> Variables.
+    runs-on: ${{ fromJSON(vars.RUNNER_LABELS || '["ubuntu-24.04"]') }}
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Free disk space
+        run: |
+          df -h /
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+            /opt/hostedtoolcache/CodeQL /usr/local/share/boost /usr/share/swift || true
+          docker system prune -a -f || true
+          df -h /
+
+      - name: Pull images and package
+        env:
+          DOCKER_IMAGES: ${{ inputs.docker_images }}
+        run: |
+          set -euo pipefail
+
+          # Accept comma or newline separated input, trim spaces, drop empties.
+          mapfile -t images < <(
+            printf '%s\n' "$DOCKER_IMAGES" \
+              | tr ',' '\n' \
+              | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//' \
+              | grep -v '^$' || true
+          )
+
+          if [ "${#images[@]}" -eq 0 ]; then
+            echo "::error::No image name found in the docker_images input."
+            exit 1
+          fi
+
+          echo "Platform: ${PLATFORM} (${ARCH}), ${#images[@]} image(s)"
+          printf '  - %s\n' "${images[@]}"
+
+          for image in "${images[@]}"; do
+            echo "::group::Pull and save ${image}"
+
+            if ! docker pull --platform "${PLATFORM}" "${image}"; then
+              echo "::error::Pull failed: ${image} - check that the tag exists and ships a ${PLATFORM} variant."
+              exit 1
+            fi
+
+            safe_name="${image//\//_}"
+            safe_name="${safe_name//:/_}"
+            safe_name="${safe_name//@/_}"
+            archive="${safe_name}-${ARCH}.tar.gz"
+
+            # Stream save into gzip so no intermediate tar doubles disk usage.
+            if ! docker save "${image}" | gzip -c > "${archive}"; then
+              echo "::error::Save failed: ${image} - usually the runner ran out of disk."
+              df -h /
+              exit 1
+            fi
+            ls -lh "${archive}"
+
+            echo "::endgroup::"
+          done
+
+      - name: Write run summary
+        run: |
+          set -euo pipefail
+          {
+            echo "## Result (${ARCH} / ${PLATFORM})"
+            echo ""
+            echo "| File | Size |"
+            echo "| --- | --- |"
+            for f in *.tar.gz; do
+              [ -e "$f" ] || continue
+              echo "| \`$f\` | $(du -h "$f" | cut -f1) |"
+            done
+            echo ""
+            echo 'Import with: `docker load -i <file>`'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Check release asset size limit
+        run: |
+          set -euo pipefail
+          # GitHub rejects release assets larger than 2 GiB. Use the artifact
+          # workflow for bigger images.
+          limit=$((2 * 1024 * 1024 * 1024))
+          too_big=0
+          for f in *.tar.gz; do
+            [ -e "$f" ] || continue
+            size=$(stat -c %s "$f")
+            if [ "$size" -gt "$limit" ]; then
+              echo "::error file=$f::${f} is $(numfmt --to=iec "$size"), above the 2 GiB release limit. Use the artifact workflow instead."
+              too_big=1
+            fi
+          done
+          if [ "$too_big" -ne 0 ]; then
+            exit 1
+          fi
+          echo "All files are within 2 GiB."
+
+      - name: Build release metadata
+        run: |
+          set -euo pipefail
+          echo "RELEASE_NAME=$(TZ='Asia/Shanghai' date +'%Y-%m-%d %H:%M Build')" >> "$GITHUB_ENV"
+          {
+            echo "## Result (${ARCH} / ${PLATFORM})"
+            echo ""
+            echo "| File | Size |"
+            echo "| --- | --- |"
+            for f in *.tar.gz; do
+              [ -e "$f" ] || continue
+              echo "| \`$f\` | $(du -h "$f" | cut -f1) |"
+            done
+            echo ""
+            echo "Published to release: \`${RELEASE_TAG}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Create or update release
+        uses: softprops/action-gh-release@v3.0.3
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: ${{ env.RELEASE_NAME }} for ARMv7
+          body: |
+            ### Usage
+
+            ```bash
+            docker load -i xxx.tar.gz
+            ```
+
+            - Platform: `linux/arm/v7` (ARMv7)
+            - The `.tar.gz` can be loaded directly; Docker detects gzip.
+            - Assets with the same name are overwritten on the next run.
+          files: ${{ github.workspace }}/*.tar.gz
+          overwrite_files: true
+          fail_on_unmatched_files: true
+          draft: false
+          prerelease: false
+          token: ${{ secrets.GITHUB_TOKEN }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
