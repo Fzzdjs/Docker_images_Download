@@ -2,7 +2,7 @@
 
 [![Release](https://img.shields.io/github/v/release/Fzzdjs/Docker_images_Download?color=blue)](https://github.com/Fzzdjs/Docker_images_Download/releases)
 [![License](https://img.shields.io/github/license/Fzzdjs/Docker_images_Download)](LICENSE)
-[![Python](https://img.shields.io/badge/python-3.8%2B-informational)](https://www.python.org/)
+[![Python](https://img.shields.io/badge/python-3.9%2B-informational)](https://www.python.org/)
 [![Zero dependencies](https://img.shields.io/badge/dependencies-none-success)](scripts/fetch_image.py)
 
 **在国内网络下拉不动 Docker 镜像时，借 GitHub Actions 的海外运行器代拉，再导出成 tar.gz 下载回本地。**
@@ -85,7 +85,7 @@ python scripts/fetch_image.py nginx:alpine
 ```
 
 脚本会自动识别当前 checkout 的 git remote，把工作流触发到**你自己的 fork** 上。
-只有一个 Python 标准库依赖，3.8+ 开箱即用。
+只有一个 Python 标准库依赖，3.9+ 开箱即用。
 
 ```
 [14:02:11] 账号      : your-name
@@ -184,6 +184,7 @@ python scripts/install_skill.py --target custom --path ~/skills --force
 | 解包 + `docker load` | 1–2 分钟 |
 
 `--connections` 调到 32 通常没有收益：瓶颈已经是你自己的出口带宽。
+小于 8 MB 的文件同样会分片（按 1 MB 切），因为限速是按连接而不是按文件生效的。
 如果长期高频使用，建议自建一台境外中转机并把 `RUNNER_LABELS` 指向它
 （`self-hosted`），详见 [docs/architecture.md](docs/architecture.md)。
 

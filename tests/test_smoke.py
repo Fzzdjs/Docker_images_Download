@@ -6,11 +6,15 @@ Run:  python -m unittest discover -s tests -v
 """
 from __future__ import annotations
 
+import hashlib
 import io
 import os
 import subprocess
 import sys
+import tempfile
+import threading
 import unittest
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from unittest import mock
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -199,6 +203,63 @@ class WorkflowSchemaTest(unittest.TestCase):
             with self.subTest(workflow=name):
                 expected = "write" if name.endswith("-release.yml") else "read"
                 self.assertEqual(data["permissions"]["contents"], expected)
+
+
+class DownloaderTest(unittest.TestCase):
+    """A 3.5 MB file must be split, not fetched over a single throttled socket."""
+
+    SIZE = 3_500_000
+
+    @classmethod
+    def setUpClass(cls):
+        cls.blob = bytes((i * 37 + 11) % 256 for i in range(cls.SIZE))
+        cls.hits = []
+        blob, hits = cls.blob, cls.hits
+
+        class Handler(BaseHTTPRequestHandler):
+            protocol_version = "HTTP/1.1"
+
+            def log_message(self, *args):
+                pass
+
+            def do_GET(self):
+                rng = self.headers.get("Range")
+                hits.append(rng)
+                if rng:
+                    a, b = (int(x) for x in rng.split("=")[1].split("-"))
+                    chunk = blob[a:b + 1]
+                    self.send_response(206)
+                    self.send_header("Content-Range", "bytes %d-%d/%d" % (a, b, len(blob)))
+                    self.send_header("Content-Length", str(len(chunk)))
+                    self.end_headers()
+                    self.wfile.write(chunk)
+                else:
+                    self.send_response(200)
+                    self.send_header("Content-Length", str(len(blob)))
+                    self.end_headers()
+                    self.wfile.write(blob)
+
+        cls.server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        threading.Thread(target=cls.server.serve_forever, daemon=True).start()
+        cls.url = "http://127.0.0.1:%d/blob.bin" % cls.server.server_address[1]
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.server.shutdown()
+        cls.server.server_close()
+
+    def test_parallel_download_is_split_and_exact(self):
+        import parallel_dl
+
+        with tempfile.TemporaryDirectory() as tmp:
+            dest = os.path.join(tmp, "out.bin")
+            parallel_dl.download(self.url, dest, connections=8, progress=False)
+            with open(dest, "rb") as fh:
+                data = fh.read()
+        self.assertEqual(len(data), self.SIZE)
+        self.assertEqual(hashlib.sha256(data).hexdigest(), hashlib.sha256(self.blob).hexdigest())
+        # 1 probe + at least 3 chunks of 1 MB
+        self.assertGreaterEqual(len(self.hits), 4, self.hits)
 
 
 if __name__ == "__main__":

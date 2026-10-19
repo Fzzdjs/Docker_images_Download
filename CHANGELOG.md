@@ -35,6 +35,9 @@ First public release under the name **Docker_images_Download**
   targets users behind the GFW, so console output stays Chinese.
 - Downloads account progress in 256 KiB pieces instead of whole 8 MB chunks, so the
   progress bar moves continuously rather than in jumps.
+- Chunk size is now adaptive: small assets (2-8 MB) are split into 1 MB ranges as
+  well, because throttling applies per connection, not per file. A 3.5 MB release
+  asset went from ~11 KB/s single-stream to four parallel ranges.
 
 ### Fixed
 

@@ -2,7 +2,7 @@
 
 [![Release](https://img.shields.io/github/v/release/Fzzdjs/Docker_images_Download?color=blue)](https://github.com/Fzzdjs/Docker_images_Download/releases)
 [![License](https://img.shields.io/github/license/Fzzdjs/Docker_images_Download)](LICENSE)
-[![Python](https://img.shields.io/badge/python-3.8%2B-informational)](https://www.python.org/)
+[![Python](https://img.shields.io/badge/python-3.9%2B-informational)](https://www.python.org/)
 
 **Pull Docker images through GitHub Actions when your network cannot reach the registry.**
 

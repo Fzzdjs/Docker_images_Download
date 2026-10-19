@@ -31,9 +31,10 @@ import urllib.request
 import progress as ui
 
 UA = "Docker_images_Download/2.0 (+https://github.com/Fzzdjs/Docker_images_Download)"
-MIN_PARALLEL_SIZE = 8 << 20          # below 8 MB concurrency does not pay off
+MIN_PARALLEL_SIZE = 2 << 20          # below 2 MB a handshake costs more than it saves
 DEFAULT_CONNECTIONS = 16
 DEFAULT_CHUNK = 8 << 20              # 8 MB per task: good balance for retries
+MIN_CHUNK = 1 << 20                  # never split finer than 1 MB
 
 
 class DownloadError(RuntimeError):
@@ -104,6 +105,11 @@ def download(url: str, dest: str, connections: int = DEFAULT_CONNECTIONS,
     if not ranged or total < MIN_PARALLEL_SIZE:
         _single_stream(url, dest, total, label=label, enabled=progress)
         return dest
+
+    # Small files still benefit from splitting: on a throttled link a single
+    # connection caps the whole download, so a 3 MB asset should not be fetched
+    # over one socket either. Keep chunks at 1 MB or larger to avoid overhead.
+    chunk_size = max(MIN_CHUNK, min(chunk_size, total // max(1, connections)))
 
     os.makedirs(os.path.dirname(os.path.abspath(dest)) or ".", exist_ok=True)
     # Pre-allocate so that concurrent writers never race on file extension.

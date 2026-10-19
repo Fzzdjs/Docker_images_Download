@@ -11,7 +11,7 @@ cd Docker_images_Download
 python -m unittest discover -s tests -v
 ```
 
-Python 3.8+ is enough to run; CI covers 3.9, 3.12 and 3.13 on Ubuntu and Windows.
+Python 3.9+ is required; CI covers 3.9, 3.12 and 3.13 on Ubuntu and Windows.
 
 ## Ground rules
 
