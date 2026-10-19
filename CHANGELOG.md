@@ -36,8 +36,9 @@ First public release under the name **Docker_images_Download**
 - Downloads account progress in 256 KiB pieces instead of whole 8 MB chunks, so the
   progress bar moves continuously rather than in jumps.
 - Chunk size is now adaptive: small assets (2-8 MB) are split into 1 MB ranges as
-  well, because throttling applies per connection, not per file. A 3.5 MB release
-  asset went from ~11 KB/s single-stream to four parallel ranges.
+  well, because throttling applies per connection, not per file. Measured on a
+  3.5 MB release asset: 11 KB/s single-stream (5m15s) became ~53 KB/s over four
+  ranges (1m10s).
 
 ### Fixed
 
